@@ -245,7 +245,7 @@ static void inv_mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
 
 /******************************************************************************/
 
-AES::AES()
+MySensorsAES::MySensorsAES()
 {
 	byte ar_iv[8] = { 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01 };
 	IVC = 0x01;
@@ -274,7 +274,7 @@ AES::AES()
 
 /******************************************************************************/
 
-byte AES::set_key (byte key [], int keylen)
+byte MySensorsAES::set_key (byte key [], int keylen)
 {
 	byte hi ;
 	switch (keylen) {
@@ -328,7 +328,7 @@ byte AES::set_key (byte key [], int keylen)
 
 /******************************************************************************/
 
-void AES::clean ()
+void MySensorsAES::clean ()
 {
 	for (byte i = 0 ; i < KEY_SCHEDULE_BYTES ; i++) {
 		key_sched [i] = 0 ;
@@ -338,7 +338,7 @@ void AES::clean ()
 
 /******************************************************************************/
 
-void AES::copy_n_bytes (byte * d, byte * s, byte nn)
+void MySensorsAES::copy_n_bytes (byte * d, byte * s, byte nn)
 {
 	while (nn >= 4) {
 		*d++ = *s++ ;  // some unrolling
@@ -354,7 +354,7 @@ void AES::copy_n_bytes (byte * d, byte * s, byte nn)
 
 /******************************************************************************/
 
-byte AES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
+byte MySensorsAES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
 {
 	if (round) {
 		byte s1 [N_BLOCK], r ;
@@ -375,7 +375,7 @@ byte AES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
 
 /******************************************************************************/
 
-byte AES::cbc_encrypt (byte * plain, byte * cipher, int n_block, byte iv [N_BLOCK])
+byte MySensorsAES::cbc_encrypt (byte * plain, byte * cipher, int n_block, byte iv [N_BLOCK])
 {
 	while (n_block--) {
 		xor_block (iv, plain) ;
@@ -391,7 +391,7 @@ byte AES::cbc_encrypt (byte * plain, byte * cipher, int n_block, byte iv [N_BLOC
 
 /******************************************************************************/
 
-byte AES::cbc_encrypt (byte * plain, byte * cipher, int n_block)
+byte MySensorsAES::cbc_encrypt (byte * plain, byte * cipher, int n_block)
 {
 	while (n_block--) {
 		xor_block (iv, plain) ;
@@ -407,7 +407,7 @@ byte AES::cbc_encrypt (byte * plain, byte * cipher, int n_block)
 
 /******************************************************************************/
 
-byte AES::decrypt (byte cipher [N_BLOCK], byte plain [N_BLOCK])
+byte MySensorsAES::decrypt (byte cipher [N_BLOCK], byte plain [N_BLOCK])
 {
 	if (round) {
 		byte s1 [N_BLOCK] ;
@@ -428,7 +428,7 @@ byte AES::decrypt (byte cipher [N_BLOCK], byte plain [N_BLOCK])
 
 /******************************************************************************/
 
-byte AES::cbc_decrypt (byte * cipher, byte * plain, int n_block, byte iv [N_BLOCK])
+byte MySensorsAES::cbc_decrypt (byte * cipher, byte * plain, int n_block, byte iv [N_BLOCK])
 {
 	while (n_block--) {
 		byte tmp [N_BLOCK] ;
@@ -446,7 +446,7 @@ byte AES::cbc_decrypt (byte * cipher, byte * plain, int n_block, byte iv [N_BLOC
 
 /******************************************************************************/
 
-byte AES::cbc_decrypt (byte * cipher, byte * plain, int n_block)
+byte MySensorsAES::cbc_decrypt (byte * cipher, byte * plain, int n_block)
 {
 	while (n_block--) {
 		byte tmp [N_BLOCK] ;
@@ -464,7 +464,7 @@ byte AES::cbc_decrypt (byte * cipher, byte * plain, int n_block)
 
 /*****************************************************************************/
 
-void AES::set_IV(unsigned long long int IVCl)
+void MySensorsAES::set_IV(unsigned long long int IVCl)
 {
 	memcpy(iv,&IVCl,8);
 	memcpy(iv+8,&IVCl,8);
@@ -473,7 +473,7 @@ void AES::set_IV(unsigned long long int IVCl)
 
 /******************************************************************************/
 
-void AES::iv_inc()
+void MySensorsAES::iv_inc()
 {
 	IVC += 1;
 	memcpy(iv,&IVC,8);
@@ -482,14 +482,14 @@ void AES::iv_inc()
 
 /******************************************************************************/
 
-int AES::get_size()
+int MySensorsAES::get_size()
 {
 	return size;
 }
 
 /******************************************************************************/
 
-void AES::set_size(int sizel)
+void MySensorsAES::set_size(int sizel)
 {
 	size = sizel;
 }
@@ -497,7 +497,7 @@ void AES::set_size(int sizel)
 
 /******************************************************************************/
 
-void AES::get_IV(byte *out)
+void MySensorsAES::get_IV(byte *out)
 {
 	memcpy(out,&IVC,8);
 	memcpy(out+8,&IVC,8);
@@ -505,7 +505,7 @@ void AES::get_IV(byte *out)
 
 /******************************************************************************/
 
-void AES::calc_size_n_pad(int p_size)
+void MySensorsAES::calc_size_n_pad(int p_size)
 {
 	int s_of_p = p_size - 1;
 	if ( s_of_p % N_BLOCK == 0) {
@@ -518,7 +518,7 @@ void AES::calc_size_n_pad(int p_size)
 
 /******************************************************************************/
 
-void AES::padPlaintext(void* in,byte* out)
+void MySensorsAES::padPlaintext(void* in,byte* out)
 {
 	memcpy(out,in,size);
 	for (int i = size-pad; i < size; i++) {
@@ -529,7 +529,7 @@ void AES::padPlaintext(void* in,byte* out)
 
 /******************************************************************************/
 
-bool AES::CheckPad(byte* in,int lsize)
+bool MySensorsAES::CheckPad(byte* in,int lsize)
 {
 	if (in[lsize-1] <= 0x0f) {
 		int lpad = (int)in[lsize-1];
@@ -546,7 +546,7 @@ bool AES::CheckPad(byte* in,int lsize)
 
 /******************************************************************************/
 
-void AES::printArray(byte output[],bool p_pad)
+void MySensorsAES::printArray(byte output[],bool p_pad)
 {
 	uint8_t i,j;
 	uint8_t loops = size/N_BLOCK;
@@ -564,7 +564,7 @@ void AES::printArray(byte output[],bool p_pad)
 
 /******************************************************************************/
 
-void AES::printArray(byte output[],int sizel)
+void MySensorsAES::printArray(byte output[],int sizel)
 {
 	for (int i = 0; i < sizel; i++) {
 		printf_P(PSTR("%x"),output[i]);
@@ -575,7 +575,7 @@ void AES::printArray(byte output[],int sizel)
 
 /******************************************************************************/
 
-void AES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits,
+void MySensorsAES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits,
                          byte ivl [N_BLOCK])
 {
 	calc_size_n_pad(size_p);
@@ -588,7 +588,7 @@ void AES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits
 
 /******************************************************************************/
 
-void AES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits)
+void MySensorsAES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits)
 {
 	calc_size_n_pad(size_p);
 	byte plain_p[get_size()];
@@ -600,7 +600,7 @@ void AES::do_aes_encrypt(byte *plain,int size_p,byte *cipher,byte *key, int bits
 
 /******************************************************************************/
 
-void AES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits,
+void MySensorsAES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits,
                          byte ivl [N_BLOCK])
 {
 	set_size(size_c);
@@ -611,7 +611,7 @@ void AES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits
 
 /******************************************************************************/
 
-void AES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits)
+void MySensorsAES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits)
 {
 	set_size(size_c);
 	int blocks = size_c / N_BLOCK;
@@ -623,7 +623,7 @@ void AES::do_aes_decrypt(byte *cipher,int size_c,byte *plain,byte *key, int bits
 /******************************************************************************/
 
 #if defined(AES_LINUX)
-double AES::millis()
+double MySensorsAES::millis()
 {
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec + 0.000001 * tv.tv_usec);

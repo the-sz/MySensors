@@ -36,7 +36,7 @@
 * 16/12/14
 */
 /** AES class */
-class AES
+class MySensorsAES
 {
 public:
 
@@ -52,7 +52,7 @@ public:
 	*
 	* This function initialized an instance of AES.
 	*/
-	AES();
+	MySensorsAES();
 
 	/** Set the cipher key for the pre-keyed version.
 	 *  @param key[] pointer to the key string.

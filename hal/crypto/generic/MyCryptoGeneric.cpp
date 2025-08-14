@@ -27,7 +27,7 @@ void SHA256HMAC(uint8_t *dest, const uint8_t *key, size_t keyLength, const uint8
 	SHA256HMACResult(dest);
 }
 
-AES _aes;
+MySensorsAES _aes;
 
 void AES128CBCInit(const uint8_t *key)
 {
