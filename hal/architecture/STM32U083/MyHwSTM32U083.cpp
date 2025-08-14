@@ -19,29 +19,9 @@
 
 #include "MyHwSTM32U083.h"
 
-/*
-* Pinout STM32F103C8 dev board:
-* http://wiki.stm32duino.com/images/a/ae/Bluepillpinout.gif
-*
-* Wiring RFM69 radio / SPI1
-* --------------------------------------------------
-* CLK	PA5
-* MISO	PA6
-* MOSI	PA7
-* CSN	PA4
-* CE	NA
-* IRQ	PA3 (default)
-*
-* Wiring RF24 radio / SPI1
-* --------------------------------------------------
-* CLK	PA5
-* MISO	PA6
-* MOSI	PA7
-* CSN	PA4
-* CE	PB0 (default)
-* IRQ	NA
-*
-*/
+bool							MustInitRTC = true;
+RTC_HandleTypeDef 		hrtc;
+
 bool hwInit(void)
 {
 #if !defined(MY_DISABLED_SERIAL)
@@ -50,6 +30,97 @@ bool hwInit(void)
 	while (!MY_SERIALDEVICE) {}
 #endif
 #endif
+
+	RCC_ClkInitTypeDef 				RCC_ClkInitStruct;
+	RCC_OscInitTypeDef 				RCC_OscInitStruct;
+	RCC_PeriphCLKInitTypeDef  		PeriphClkInitStruct;
+
+	// enable Power Control clock
+	__HAL_RCC_PWR_CLK_ENABLE();
+
+	if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_PWREx_ControlVoltageScaling() failed.\n"));
+	}
+
+	// select MSI Oscillator as PLL source
+	RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+	RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
+	RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
+	RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT ;
+	RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_11;
+	RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_MSI; /* MSI = 48MHz */
+	RCC_OscInitStruct.PLL.PLLM            = RCC_PLLM_DIV8;
+	RCC_OscInitStruct.PLL.PLLN            = 8;
+	RCC_OscInitStruct.PLL.PLLP            = RCC_PLLP_DIV2; /* 24MHz */
+	RCC_OscInitStruct.PLL.PLLQ            = RCC_PLLQ_DIV2; /* 24MHz */
+	RCC_OscInitStruct.PLL.PLLR            = RCC_PLLR_DIV2; /* 24MHz */
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct)!= HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_RCC_OscConfig() 1 failed.\n"));
+	}
+
+	// select PLL as system clock source and configure the HCLK and PCLK1 clocks dividers
+	RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1);
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1)!= HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_RCC_ClockConfig() failed.\n"));
+	}
+
+	// configure the RTC clock source
+	// enable LSI Oscillator
+	RCC_OscInitStruct.OscillatorType =  RCC_OSCILLATORTYPE_LSI;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+	RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+	RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
+	if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_RCC_OscConfig() 2 failed.\n"));
+	}
+
+	// select LSI as RTC clock source
+	PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+	PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+	if(HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_RCCEx_PeriphCLKConfig() failed.\n"));
+	}
+
+	// enable the RTC peripheral Clock
+	__HAL_RCC_RTC_ENABLE();
+	__HAL_RCC_RTCAPB_CLK_ENABLE();
+
+	// init rtc
+	hrtc.Instance = RTC;
+	hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+	hrtc.Init.AsynchPrediv = 127;
+	hrtc.Init.SynchPrediv = 255;
+	hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+	hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+	hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+	if (HAL_RTC_Init(&hrtc) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("hwInit: HAL_RTC_Init() failed.\n"));
+	}
+
+	// ensure that MSI is wake-up system clock
+	__HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_MSI);
+
+	// enable Ultra low power mode
+	HAL_PWREx_EnableUltraLowPowerMode();
+
+	// enable the fast wake up from Ultra low power mode
+	HAL_PWREx_EnableInternalWakeUpLine();
+
+	// configure the NVIC for RTC Alarm
+//XXX
+//	HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0x0, 0);
+//	HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
+
 /*xxx
 	if (EEPROM.init() == EEPROM_OK) {
 		uint16 cnt;
@@ -95,15 +166,113 @@ void hwWriteConfig(const int addr, uint8_t value)
 	hwWriteConfigBlock(&value, reinterpret_cast<void *>(addr), 1);
 }
 
+/**
+ * @brief  Configures system clock after wake-up from STOP: enable HSE, PLL
+ *         and select PLL as system clock source.
+ * @param  None
+ * @retval None
+ */
+static void SYSCLKConfig_STOP(void)
+{
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+	uint32_t pFLatency = 0;
+
+	/* Enable Power Clock */
+	__HAL_RCC_PWR_CLK_ENABLE();
+
+	/* Get the Oscillators configuration according to the internal RCC registers */
+	HAL_RCC_GetOscConfig(&RCC_OscInitStruct);
+
+	/* Enable PLL */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_NONE;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("SYSCLKConfig_STOP: HAL_RCC_OscConfig() 1 failed.\n"));
+	}
+
+	/* Get the Clocks configuration according to the internal RCC registers */
+	HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &pFLatency);
+
+	/* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2
+	clocks dividers */
+	RCC_ClkInitStruct.ClockType     = RCC_CLOCKTYPE_SYSCLK;
+	RCC_ClkInitStruct.SYSCLKSource  = RCC_SYSCLKSOURCE_PLLCLK;
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, pFLatency) != HAL_OK)
+	{
+		DEBUG_OUTPUT(PSTR("SYSCLKConfig_STOP: HAL_RCC_OscConfig() 2 failed.\n"));
+	}
+}
+
+extern "C"
+{
+	void RTC_TAMP_IRQHandler(void)
+	{
+		HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+	}
+
+	void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+	{
+	}
+/*
+	void ADC_COMP1_2_IRQHandler(void)
+	{
+		HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+	}
+		*/
+}
+
 int8_t hwSleep(uint32_t ms)
 {
-	// TODO: Not supported!
-	(void)ms;
-	return MY_SLEEP_NOT_POSSIBLE;
+	DEBUG_OUTPUT(PSTR("hwSleep() start.\n"));
+
+	if (MustInitRTC == true)
+	{
+		hwInit();
+		DEBUG_OUTPUT(PSTR("hwSleep() hwInit() called.\n"));
+		MustInitRTC = false;
+	}
+
+	// disable all used wakeup source
+	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
+	// re-enable wakeup source
+	uint32_t wakeUpCounter = (32768 * ms) / 16 /* RTC_WAKEUPCLOCK_RTCCLK_DIV16 */ / 1000;
+
+	/* max sleep time is 33s if wakeUpCounter is set to 0xFFFF:
+	Wakeup Time Base = 16 /(~32 kHz RC) = ~0.5 ms
+	Wakeup Time = 0.5 ms * WakeUpCounter
+	Therefore, with wake-up counter =  0xFFFF  = 65,535
+	Wakeup Time =  0.5 ms *  65,535 = ~ 33 sec. */
+	if (wakeUpCounter > 0xFFFF)
+		wakeUpCounter = 0xFFFF;
+//XXX
+wakeUpCounter = 1 * 0xFFF;
+HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 1);
+//HAL_RTCEx_SetWakeUpTimer(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+
+	HAL_SuspendTick();
+
+// Enter STOP 2 mode
+//HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+//HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFE);
+HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE);
+
+	// configure system clock after wake-up from STOP: enable HSE, PLL and select PLL as system clock source (HSE and PLL are disabled in STOP mode)
+	SYSCLKConfig_STOP();
+
+	HAL_ResumeTick();
+
+	DEBUG_OUTPUT(PSTR("hwSleep() done.\n"));
+
+	return MY_WAKE_UP_BY_TIMER;
 }
 
 int8_t hwSleep(const uint8_t interrupt, const uint8_t mode, uint32_t ms)
 {
+	DEBUG_OUTPUT(PSTR("hwSleep() #2 not supported.\n"));
+
 	// TODO: Not supported!
 	(void)interrupt;
 	(void)mode;
@@ -115,6 +284,8 @@ int8_t hwSleep(const uint8_t interrupt1, const uint8_t mode1, const uint8_t inte
                const uint8_t mode2,
                uint32_t ms)
 {
+	DEBUG_OUTPUT(PSTR("hwSleep() #3 not supported.\n"));
+
 	// TODO: Not supported!
 	(void)interrupt1;
 	(void)mode1;
@@ -123,7 +294,6 @@ int8_t hwSleep(const uint8_t interrupt1, const uint8_t mode1, const uint8_t inte
 	(void)ms;
 	return MY_SLEEP_NOT_POSSIBLE;
 }
-
 
 void hwRandomNumberInit(void)
 {
