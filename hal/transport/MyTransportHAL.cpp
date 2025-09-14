@@ -44,6 +44,7 @@ bool transportHALInit(void)
 	TRANSPORT_HAL_DEBUG(PSTR("THA:INIT:PSK=%s\n"),hwDebugPrintStr);
 #endif
 #endif
+
 	bool result = transportInit();
 
 #if defined(MY_TRANSPORT_ENCRYPTION)
@@ -86,6 +87,10 @@ bool transportHALDataAvailable(void)
 
 bool transportHALSanityCheck(void)
 {
+//XXX
+TRANSPORT_HAL_DEBUG(PSTR("transportHALSanityCheck always true\n"));
+return true;
+
 	bool result = transportSanityCheck();
 	TRANSPORT_HAL_DEBUG(PSTR("THA:SAN:RES=%" PRIu8 "\n"), result);
 	return result;

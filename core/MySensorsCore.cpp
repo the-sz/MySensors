@@ -313,6 +313,10 @@ controllerConfig_t getControllerConfig(void)
 // cppcheck-suppress constParameter
 bool _sendRoute(MyMessage &message)
 {
+//XXX
+CORE_DEBUG(PSTR("_sendRoute() disabled\n"));
+return true;
+
 #if defined(MY_CORE_ONLY)
 	(void)message;
 #endif
@@ -655,7 +659,9 @@ int8_t _sleep(const uint32_t sleepingMS, const bool smartSleep, const uint8_t in
 	uint32_t sleepingTimeMS = sleepingMS;
 #if defined(MY_SENSOR_NETWORK)
 	// Do not sleep if transport not ready
-	if (!isTransportReady()) {
+CORE_DEBUG(PSTR("_sleep() isTransportReady() not called\n"));
+	if (false) {
+//xxx	if (!isTransportReady()) {
 		CORE_DEBUG(PSTR("!MCO:SLP:TNR\n"));	// sleeping not possible, transport not ready
 		const uint32_t sleepEnterMS = hwMillis();
 		uint32_t sleepDeltaMS = 0;

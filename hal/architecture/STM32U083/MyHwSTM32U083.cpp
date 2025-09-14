@@ -1,26 +1,10 @@
-/*
- * The MySensors Arduino library handles the wireless radio link and protocol
- * between your home built sensors/actuators and HA controller of choice.
- * The sensors forms a self healing radio network with optional repeaters. Each
- * repeater and gateway builds a routing tables in EEPROM which keeps track of the
- * network topology allowing messages to be routed to nodes.
- *
- * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2022 Sensnology AB
- * Full contributor list: https://github.com/mysensors/MySensors/graphs/contributors
- *
- * Documentation: http://www.mysensors.org
- * Support Forum: http://forum.mysensors.org
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- */
-
 #include "MyHwSTM32U083.h"
 
-bool							MustInitRTC = true;
-RTC_HandleTypeDef 		hrtc;
+RTC_HandleTypeDef 						hrtc;
+static RCC_ClkInitTypeDef				SavedRccClkInit;
+static RCC_OscInitTypeDef				SavedRccOscInit;
+static RCC_PeriphCLKInitTypeDef		SavedPeriphClkInit;
+static uint32_t							SavedLatency;
 
 bool hwInit(void)
 {
@@ -33,7 +17,7 @@ bool hwInit(void)
 
 	RCC_ClkInitTypeDef 				RCC_ClkInitStruct;
 	RCC_OscInitTypeDef 				RCC_OscInitStruct;
-	RCC_PeriphCLKInitTypeDef  		PeriphClkInitStruct;
+	RCC_PeriphCLKInitTypeDef		PeriphClkInitStruct;
 
 	// enable Power Control clock
 	__HAL_RCC_PWR_CLK_ENABLE();
@@ -72,7 +56,7 @@ bool hwInit(void)
 
 	// configure the RTC clock source
 	// enable LSI Oscillator
-	RCC_OscInitStruct.OscillatorType =  RCC_OSCILLATORTYPE_LSI;
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI;
 	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
 	RCC_OscInitStruct.LSIState = RCC_LSI_ON;
 	RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
@@ -115,11 +99,6 @@ bool hwInit(void)
 
 	// enable the fast wake up from Ultra low power mode
 	HAL_PWREx_EnableInternalWakeUpLine();
-
-	// configure the NVIC for RTC Alarm
-//XXX
-//	HAL_NVIC_SetPriority(RTC_TAMP_IRQn, 0x0, 0);
-//	HAL_NVIC_EnableIRQ(RTC_TAMP_IRQn);
 
 /*xxx
 	if (EEPROM.init() == EEPROM_OK) {
@@ -166,77 +145,21 @@ void hwWriteConfig(const int addr, uint8_t value)
 	hwWriteConfigBlock(&value, reinterpret_cast<void *>(addr), 1);
 }
 
-/**
- * @brief  Configures system clock after wake-up from STOP: enable HSE, PLL
- *         and select PLL as system clock source.
- * @param  None
- * @retval None
- */
-static void SYSCLKConfig_STOP(void)
-{
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	uint32_t pFLatency = 0;
-
-	/* Enable Power Clock */
-	__HAL_RCC_PWR_CLK_ENABLE();
-
-	/* Get the Oscillators configuration according to the internal RCC registers */
-	HAL_RCC_GetOscConfig(&RCC_OscInitStruct);
-
-	/* Enable PLL */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_NONE;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	{
-		DEBUG_OUTPUT(PSTR("SYSCLKConfig_STOP: HAL_RCC_OscConfig() 1 failed.\n"));
-	}
-
-	/* Get the Clocks configuration according to the internal RCC registers */
-	HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &pFLatency);
-
-	/* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2
-	clocks dividers */
-	RCC_ClkInitStruct.ClockType     = RCC_CLOCKTYPE_SYSCLK;
-	RCC_ClkInitStruct.SYSCLKSource  = RCC_SYSCLKSOURCE_PLLCLK;
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, pFLatency) != HAL_OK)
-	{
-		DEBUG_OUTPUT(PSTR("SYSCLKConfig_STOP: HAL_RCC_OscConfig() 2 failed.\n"));
-	}
-}
-
-extern "C"
-{
-	void RTC_TAMP_IRQHandler(void)
-	{
-		HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
-	}
-
-	void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-	{
-	}
-/*
-	void ADC_COMP1_2_IRQHandler(void)
-	{
-		HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
-	}
-		*/
-}
-
 int8_t hwSleep(uint32_t ms)
 {
 	DEBUG_OUTPUT(PSTR("hwSleep() start.\n"));
 
-	if (MustInitRTC == true)
-	{
-		hwInit();
-		DEBUG_OUTPUT(PSTR("hwSleep() hwInit() called.\n"));
-		MustInitRTC = false;
-	}
+	// get the oscillators configuration according to the internal RCC registers
+	HAL_RCC_GetOscConfig(&SavedRccOscInit);
+	// get the clock configuration according to the internal RCC registers
+	HAL_RCC_GetClockConfig(&SavedRccClkInit, &SavedLatency);
+	// get the peripheral clock configuration according to the internal RCC registers
+	HAL_RCCEx_GetPeriphCLKConfig(&SavedPeriphClkInit);
 
 	// disable all used wakeup source
 	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-
+ms = 3000;
+//XXX support larger sleep times
 	// re-enable wakeup source
 	uint32_t wakeUpCounter = (32768 * ms) / 16 /* RTC_WAKEUPCLOCK_RTCCLK_DIV16 */ / 1000;
 
@@ -247,21 +170,32 @@ int8_t hwSleep(uint32_t ms)
 	Wakeup Time =  0.5 ms *  65,535 = ~ 33 sec. */
 	if (wakeUpCounter > 0xFFFF)
 		wakeUpCounter = 0xFFFF;
-//XXX
-wakeUpCounter = 1 * 0xFFF;
-HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 1);
-//HAL_RTCEx_SetWakeUpTimer(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+	HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 1);
 
+	// disable systick
 	HAL_SuspendTick();
 
-// Enter STOP 2 mode
-//HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
-//HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFE);
-HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE);
+	// enter STOP 2 mode
+	HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFE);
 
-	// configure system clock after wake-up from STOP: enable HSE, PLL and select PLL as system clock source (HSE and PLL are disabled in STOP mode)
-	SYSCLKConfig_STOP();
+	// deactivate rtc wakeup interrupts
+	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
 
+	// enable power clock
+	__HAL_RCC_PWR_CLK_ENABLE();
+
+	// restore system clock settings after wake-up from STOP
+	// setup oscillator as before stop
+	HAL_RCC_OscConfig(&SavedRccOscInit);
+	// setup clocking as before stop
+	HAL_RCC_ClockConfig(&SavedRccClkInit, SavedLatency);
+	// setup peripheral clock as before stop
+	HAL_RCCEx_PeriphCLKConfig(&SavedPeriphClkInit);
+
+// xxx adjust tick counter
+// __IO uint32_t uwTick;
+
+	// enable systick
 	HAL_ResumeTick();
 
 	DEBUG_OUTPUT(PSTR("hwSleep() done.\n"));

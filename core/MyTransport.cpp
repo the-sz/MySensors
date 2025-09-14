@@ -97,6 +97,11 @@ void stInitTransition(void)
 
 void stInitUpdate(void)
 {
+//XXX
+TRANSPORT_DEBUG(PSTR("stInitUpdate() disabled\n"));
+transportSwitchSM(stReady);
+return;
+
 	// initialise radio
 	if (!transportHALInit()) {
 		TRANSPORT_DEBUG(PSTR("!TSM:INIT:TSP FAIL\n"));

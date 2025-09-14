@@ -477,6 +477,8 @@ MY_DEFAULT_RX_LED_PIN in your sketch instead to enable LEDs
 #include "hal/architecture/Linux/MyMainLinuxGeneric.cpp"
 #elif defined(ARDUINO_ARCH_STM32F1)
 #include "hal/architecture/STM32F1/MyMainSTM32F1.cpp"
+#elif defined(ARDUINO_ARCH_STM32U083)
+#include "hal/architecture/STM32U083/MyMainSTM32U083.cpp"
 #elif defined(__ASR6501__) || defined(__ASR6502__)
 #include "hal/architecture/ASR650x/MyMainASR650x.cpp"
 #elif defined(__arm__) && defined(TEENSYDUINO)
