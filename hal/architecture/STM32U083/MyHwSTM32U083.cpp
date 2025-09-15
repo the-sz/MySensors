@@ -5,6 +5,7 @@ static RCC_ClkInitTypeDef				SavedRccClkInit;
 static RCC_OscInitTypeDef				SavedRccOscInit;
 static RCC_PeriphCLKInitTypeDef		SavedPeriphClkInit;
 static uint32_t							SavedLatency;
+extern __IO uint32_t 					uwTick;					// from C:\Users\<user>\AppData\Local\Arduino15\packages\STMicroelectronics\hardware\stm32\2.10.1\system\Drivers\STM32U0xx_HAL_Driver\Src\stm32u0xx_hal.c
 
 bool hwInit(void)
 {
@@ -158,25 +159,30 @@ int8_t hwSleep(uint32_t ms)
 
 	// disable all used wakeup source
 	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-ms = 3000;
-//XXX support larger sleep times
-	// re-enable wakeup source
-	uint32_t wakeUpCounter = (32768 * ms) / 16 /* RTC_WAKEUPCLOCK_RTCCLK_DIV16 */ / 1000;
-
-	/* max sleep time is 33s if wakeUpCounter is set to 0xFFFF:
-	Wakeup Time Base = 16 /(~32 kHz RC) = ~0.5 ms
-	Wakeup Time = 0.5 ms * WakeUpCounter
-	Therefore, with wake-up counter =  0xFFFF  = 65,535
-	Wakeup Time =  0.5 ms *  65,535 = ~ 33 sec. */
-	if (wakeUpCounter > 0xFFFF)
-		wakeUpCounter = 0xFFFF;
-	HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, wakeUpCounter, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 1);
 
 	// disable systick
 	HAL_SuspendTick();
 
-	// enter STOP 2 mode
-	HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFE);
+	uint32_t wakeUpCounter = (32768 * ms) / 16 /* RTC_WAKEUPCLOCK_RTCCLK_DIV16 */ / 1000;
+	do
+	{
+		/* max sleep time is 33s if wakeUpCounter is set to 0xFFFF:
+		Wakeup Time Base = 16 /(~32 kHz RC) = ~0.5 ms
+		Wakeup Time = 0.5 ms * WakeUpCounter
+		Therefore, with wake-up counter =  0xFFFF  = 65,535
+		Wakeup Time =  0.5 ms *  65,535 = ~ 33 sec. */
+		uint32_t wakeUpCounterCurrent = wakeUpCounter;
+		if (wakeUpCounterCurrent > 0xFFFF)
+			wakeUpCounterCurrent = 0xFFFF;
+		// enable wakeup source
+		HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, wakeUpCounterCurrent, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 1);
+
+		// enter STOP 2 mode
+		HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFE);
+
+		wakeUpCounter -= wakeUpCounterCurrent;
+
+	} while (wakeUpCounter > 0);
 
 	// deactivate rtc wakeup interrupts
 	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
@@ -192,13 +198,12 @@ ms = 3000;
 	// setup peripheral clock as before stop
 	HAL_RCCEx_PeriphCLKConfig(&SavedPeriphClkInit);
 
-// xxx adjust tick counter
-// __IO uint32_t uwTick;
+	// adjust tick counter for sleep'd time
+	DEBUG_OUTPUT(PSTR("hwSleep() Adjust tick counter for %u ms.\n"), ms);
+	uwTick += ms;
 
 	// enable systick
 	HAL_ResumeTick();
-
-	DEBUG_OUTPUT(PSTR("hwSleep() done.\n"));
 
 	return MY_WAKE_UP_BY_TIMER;
 }
